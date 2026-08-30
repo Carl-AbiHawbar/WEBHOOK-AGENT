@@ -121,9 +121,34 @@ Three things keep the bill down:
 
 ## Deploying
 
-Works on Vercel as-is. Set `GOOGLE_PLACES_API_KEY` and `APP_PASSWORD` as
-environment variables in the project settings — and set a real password, since a
-public URL without one is an open tap on your Places quota.
+Works on Vercel as-is; it builds on Linux, so the Windows compiler problem below
+does not apply there.
+
+1. **Import the repo** at vercel.com/new and pick this GitHub repository. Leave
+   the framework preset on Next.js and do not deploy yet.
+2. **Add environment variables** before the first build, under Environment
+   Variables:
+   - `GOOGLE_PLACES_API_KEY` — your Places API (New) key
+   - `APP_PASSWORD` — the password for the app itself
+   - `AUTO_PAGES_PER_CATEGORY` — optional; `1` makes sweeps three times cheaper
+     and faster
+3. **Deploy.**
+
+Changing an environment variable later needs a redeploy to take effect; Vercel
+does not apply them to an existing build.
+
+### Things that behave differently once deployed
+
+- **The cache is per-instance.** It lives in module scope, so each cold serverless
+  instance starts empty. It still prevents a double-click from billing twice, but
+  it will not spread savings across the whole deployment.
+- **Sweeps are slow enough to matter.** A full sweep is ~30 Places calls and takes
+  around 5 seconds on a fast connection. The routes declare a `maxDuration`, but a
+  host that caps below that will kill a sweep mid-flight. If that happens, set
+  `AUTO_PAGES_PER_CATEGORY=1`.
+- **The password is the only thing guarding your quota.** A public URL with a weak
+  password is an open tap on Places billing. Pair it with a daily quota cap in the
+  Google Cloud Console so a leak has a ceiling.
 
 ## Tests
 

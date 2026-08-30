@@ -6,6 +6,9 @@ import type { SearchOutcome } from "@/lib/types";
 
 export const runtime = "nodejs";
 
+/** Up to 3 Places calls; generous ceiling so a slow upstream does not 504. */
+export const maxDuration = 30;
+
 // Module-level so it survives across requests within a warm server instance.
 const cache = new TtlCache<Omit<SearchOutcome, "fromCache">>();
 

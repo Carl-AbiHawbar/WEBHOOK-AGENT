@@ -7,6 +7,19 @@ import type { SweepResult } from "@/lib/sweep";
 
 export const runtime = "nodejs";
 
+/**
+ * A sweep is ~30 sequential-ish Places calls and takes ~5s on a fast connection,
+ * which is close enough to a host's default cutoff to fail on a slow one.
+ * Hosts that honour this raise the ceiling; if a sweep still times out, drop
+ * AUTO_PAGES_PER_CATEGORY to 1 to cut the work to a third.
+ */
+export const maxDuration = 60;
+
+/**
+ * Cache lives in module scope, so it is per-instance. On a serverless host each
+ * cold instance starts empty and warm instances share nothing - it saves repeat
+ * cost within one instance rather than across the deployment.
+ */
 const cache = new TtlCache<SweepResult>();
 
 const DEFAULT_RADIUS_METERS = 16000; // ~10 miles
