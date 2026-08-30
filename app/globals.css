@@ -161,3 +161,7 @@ a { color: var(--accent); }
 }
 
 form.login { grid-template-columns: 1fr auto; max-width: 420px; }
+
+details.manual { margin-top: 2.5rem; border-top: 1px solid var(--border); padding-top: 1.25rem; }
+details.manual summary { cursor: pointer; font-weight: 600; font-size: .92rem; color: var(--muted); margin-bottom: 1rem; }
+details.manual summary:hover { color: var(--text); }

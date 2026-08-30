@@ -113,3 +113,40 @@ describe("textSearch", () => {
     expect(result.places).toEqual([]);
   });
 });
+
+describe("textSearch location bias", () => {
+  it("sends no locationBias when none is given", async () => {
+    const fetchImpl = vi.fn().mockImplementation(async () => jsonResponse({ places: [] }));
+    await textSearch({ ...baseArgs, fetchImpl });
+
+    expect(JSON.parse(fetchImpl.mock.calls[0][1].body).locationBias).toBeUndefined();
+  });
+
+  it("sends a circle around the given point when biased", async () => {
+    const fetchImpl = vi.fn().mockImplementation(async () => jsonResponse({ places: [] }));
+    await textSearch({
+      ...baseArgs,
+      bias: { latitude: 31.55, longitude: -97.15, radiusMeters: 16000 },
+      fetchImpl,
+    });
+
+    expect(JSON.parse(fetchImpl.mock.calls[0][1].body).locationBias).toEqual({
+      circle: { center: { latitude: 31.55, longitude: -97.15 }, radius: 16000 },
+    });
+  });
+
+  it("keeps the bias on every paginated request", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockImplementationOnce(async () => jsonResponse({ places: [], nextPageToken: "t1" }))
+      .mockImplementationOnce(async () => jsonResponse({ places: [] }));
+
+    await textSearch({
+      ...baseArgs,
+      bias: { latitude: 1, longitude: 2, radiusMeters: 5000 },
+      fetchImpl,
+    });
+
+    expect(JSON.parse(fetchImpl.mock.calls[1][1].body).locationBias).toBeDefined();
+  });
+});

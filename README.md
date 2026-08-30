@@ -3,6 +3,11 @@
 Finds local businesses on Google Maps that have **no website**, ranks them by how
 much they stand to gain from one, and exports the list as CSV.
 
+Open it and it works on its own: the page asks your browser where you are, sweeps
+ten local trades, and shows the businesses without websites ranked best-first. No
+typing required. A manual search is tucked under "Search somewhere else" for
+looking at other towns.
+
 Built as a private tool: one shared password, no accounts, no database.
 
 ## How it finds them
@@ -21,6 +26,34 @@ rating as a smaller modifier: a shop with 300 reviews, 4.8 stars and no website
 is demonstrably busy and demonstrably leaving money on the table, which makes it
 a far better call than a place with two reviews.
 
+## The automatic sweep
+
+On load the page requests your coordinates and searches these ten trades around
+you, all of them owner-operated businesses that typically run on phone calls and
+word of mouth:
+
+barber shop, nail salon, hair salon, plumber, landscaping, cleaning service,
+auto repair shop, tattoo shop, hvac contractor, roofing contractor.
+
+Results are merged and deduped by place id, because one business legitimately
+matches several trades. A real sweep near Waco returned **146 website-less
+businesses out of 457 scanned, using 30 billed requests**.
+
+If a single trade's search fails, the sweep keeps going and reports which trades
+were skipped — partial leads beat no leads.
+
+### Pinning an area
+
+`?lat=&lng=` skips geolocation and sweeps a fixed point, so you can bookmark a
+territory or share one:
+
+```
+http://localhost:3000/?lat=31.549&lng=-97.146
+```
+
+Denying the location prompt is not fatal; the page says so and points you at the
+manual search.
+
 ## Running it
 
 ```bash
@@ -38,7 +71,8 @@ All of it lives in `.env.local`, which is gitignored:
 | --- | --- |
 | `GOOGLE_PLACES_API_KEY` | Places API (New) key. Server-side only — never reaches the browser. |
 | `APP_PASSWORD` | Shared password for the app. Leave empty to disable the gate (localhost only). |
-| `MAX_PAGES_PER_SEARCH` | Cost ceiling, 1–3. Each page is one billed request and returns 20 businesses. |
+| `MAX_PAGES_PER_SEARCH` | Cost ceiling for a manual search, 1–3. Each page is one billed request and returns 20 businesses. |
+| `AUTO_PAGES_PER_CATEGORY` | Cost ceiling per trade in the automatic sweep, 1–3. At 3 a full sweep is ~30 requests; at 1 it is ~10. |
 
 ### Securing the API key
 
@@ -63,7 +97,12 @@ billing page — Google has changed this pricing recently.
 
 Three things keep the bill down:
 
-- Every search is capped at `MAX_PAGES_PER_SEARCH` billed requests.
+- A manual search is capped at `MAX_PAGES_PER_SEARCH` billed requests; the
+  automatic sweep at `AUTO_PAGES_PER_CATEGORY` per trade. **Turning
+  `AUTO_PAGES_PER_CATEGORY` down to 1 cuts a sweep from ~30 requests to ~10** and
+  is the single biggest lever on your bill.
+- Sweep results are cached against coordinates rounded to ~1km, so refreshing the
+  page or moving slightly does not re-bill.
 - Identical searches are served from a 10-minute in-memory cache, so
   double-clicking costs nothing.
 - The result summary always shows how many requests a search actually used.
@@ -92,20 +131,49 @@ public URL without one is an open tap on your Places quota.
 npm test
 ```
 
-Covers website detection, lead scoring, CSV escaping, the TTL cache, the auth
-token, and every Places error path with `fetch` mocked. No test hits the live API.
+58 tests covering website detection, lead scoring, CSV escaping, the TTL cache,
+the auth token, sweep dedupe and partial-failure handling, location bias, and
+every Places error path with `fetch` mocked. No test hits the live API.
 
 ## Layout
 
 ```
-app/page.tsx           search form + results table
+app/page.tsx           auto sweep on load + results table + manual search
 app/login/page.tsx     password form
-app/api/search/route.ts  server-only Places call; the key lives here
+app/api/auto/route.ts    automatic multi-trade sweep around coordinates
+app/api/search/route.ts  single manual search; the key lives here too
 app/api/login/route.ts   sets the auth cookie
 proxy.ts               password gate over every route
 lib/places.ts          Places client, field mask, pagination, error mapping
 lib/leads.ts           website detection + lead scoring
+lib/trades.ts          the ten trades swept automatically
+lib/sweep.ts           runs trades in parallel, merges and dedupes
 lib/csv.ts             export formatting
 lib/cache.ts           short-lived cost guard
 lib/auth.ts            cookie token hashing
 ```
+
+## Troubleshooting
+
+**`An Application Control policy has blocked this file` / `next-swc.win32-x64-msvc.node`**
+
+Windows is blocking Next's native compiler binary. Next falls back to WASM
+bindings, which run `next dev --webpack` fine but fail `next build` with a
+confusing `EISDIR ... readlink app/api/<any>/route.ts` — the named route is a red
+herring, it fails on whichever route it reaches first.
+
+Options:
+
+- Build on your host instead. Vercel builds on Linux and is unaffected, so
+  deploys work regardless of this.
+- Allow the binary in Windows Security → App & browser control. On Windows 11
+  Home this is usually Smart App Control, which **cannot be re-enabled without
+  reinstalling Windows** once turned off — worth knowing before you touch it.
+- Run `next dev --webpack` locally and let CI do the production build.
+
+**`No Places API key configured`**
+
+The process cannot see `GOOGLE_PLACES_API_KEY`. A fresh clone has no
+`.env.local` — it is gitignored on purpose. Copy yours across, or start from
+`.env.example`. On a host, set it in that host's environment variables, not in
+the repo, and redeploy afterwards.

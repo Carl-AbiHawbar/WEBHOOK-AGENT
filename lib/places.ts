@@ -73,10 +73,19 @@ function describeFailure(status: number, body: string): PlacesApiError {
   return new PlacesApiError(`Places API error (HTTP ${status}): ${detail}`, status);
 }
 
+/** Centre point and radius (metres) to bias a search toward. */
+export interface LocationBias {
+  latitude: number;
+  longitude: number;
+  radiusMeters: number;
+}
+
 export interface TextSearchOptions {
   query: string;
   apiKey: string;
   maxPages: number;
+  /** Restricts results to a circle, for "near me" searches with no typed location. */
+  bias?: LocationBias;
   /** Injectable for tests; defaults to global fetch. */
   fetchImpl?: typeof fetch;
 }
@@ -97,6 +106,7 @@ export async function textSearch({
   query,
   apiKey,
   maxPages,
+  bias,
   fetchImpl = fetch,
 }: TextSearchOptions): Promise<TextSearchResult> {
   const pageLimit = Math.min(Math.max(maxPages, 1), GOOGLE_MAX_PAGES);
@@ -106,6 +116,14 @@ export async function textSearch({
 
   for (let page = 0; page < pageLimit; page++) {
     const body: Record<string, unknown> = { textQuery: query, pageSize: PAGE_SIZE };
+    if (bias) {
+      body.locationBias = {
+        circle: {
+          center: { latitude: bias.latitude, longitude: bias.longitude },
+          radius: bias.radiusMeters,
+        },
+      };
+    }
     // Google requires textQuery to stay identical when paginating.
     if (pageToken) body.pageToken = pageToken;
 
